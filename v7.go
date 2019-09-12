@@ -21,17 +21,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	log "github.com/cihub/seelog"
 	"io"
 	"io/ioutil"
 	"strings"
+
+	log "github.com/cihub/seelog"
 )
 
 type ESAPIV7 struct {
 	ESAPIV5
 }
 
-func (s *ESAPIV7) NewScroll(indexNames string, scrollTime string, docBufferCount int, query string, slicedId, maxSlicedCount int, fields string) (scroll interface{}, err error) {
+func (s *ESAPIV7) NewScroll(indexNames string, scrollTime string, docBufferCount int, query string, match string, slicedId, maxSlicedCount int, fields string) (scroll interface{}, err error) {
 	url := fmt.Sprintf("%s/%s/_search?scroll=%s&size=%d", s.Host, indexNames, scrollTime, docBufferCount)
 
 	jsonBody := ""
@@ -67,6 +68,10 @@ func (s *ESAPIV7) NewScroll(indexNames string, scrollTime string, docBufferCount
 		} else {
 			jsonBody = string(jsonArray)
 		}
+	}
+	//by danny
+	if len(match) > 0 {
+		jsonBody = match
 	}
 
 	resp, body, errs := Post(url, s.Auth, jsonBody, s.HttpProxy)

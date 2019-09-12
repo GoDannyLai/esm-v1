@@ -28,7 +28,6 @@ type Document struct {
 	Routing string                 `json:"_routing,omitempty"`
 }
 
-
 type Scroll struct {
 	Took     int    `json:"took,omitempty"`
 	ScrollId string `json:"_scroll_id,omitempty"`
@@ -41,7 +40,7 @@ type Scroll struct {
 	Shards struct {
 		Total      int `json:"total,omitempty"`
 		Successful int `json:"successful,omitempty"`
-		Skipped int `json:"skipped,omitempty"`
+		Skipped    int `json:"skipped,omitempty"`
 		Failed     int `json:"failed,omitempty"`
 		Failures   []struct {
 			Shard  int         `json:"shard,omitempty"`
@@ -54,13 +53,13 @@ type Scroll struct {
 
 type ScrollV7 struct {
 	Scroll
-	Hits     struct {
-		MaxScore float32       `json:"max_score,omitempty"`
-		Total    struct{
-			Value int `json:"value,omitempty"`
+	Hits struct {
+		MaxScore float32 `json:"max_score,omitempty"`
+		Total    struct {
+			Value    int    `json:"value,omitempty"`
 			Relation string `json:"relation,omitempty"`
-		}           `json:"total,omitempty"`
-		Docs     []interface{} `json:"hits,omitempty"`
+		} `json:"total,omitempty"`
+		Docs []interface{} `json:"hits,omitempty"`
 	} `json:"hits"`
 }
 
@@ -80,8 +79,8 @@ type ClusterHealth struct {
 
 //{"took":23,"errors":true,"items":[{"create":{"_index":"mybank3","_type":"my_doc2","_id":"AWz8rlgUkzP-cujdA_Fv","status":409,"error":{"type":"version_conflict_engine_exception","reason":"[AWz8rlgUkzP-cujdA_Fv]: version conflict, document already exists (current version [1])","index_uuid":"w9JZbJkfSEWBI-uluWorgw","shard":"0","index":"mybank3"}}},{"create":{"_index":"mybank3","_type":"my_doc4","_id":"AWz8rpF2kzP-cujdA_Fx","status":400,"error":{"type":"illegal_argument_exception","reason":"Rejecting mapping update to [mybank3] as the final mapping would have more than 1 type: [my_doc2, my_doc4]"}}},{"create":{"_index":"mybank3","_type":"my_doc1","_id":"AWz8rjpJkzP-cujdA_Fu","status":400,"error":{"type":"illegal_argument_exception","reason":"Rejecting mapping update to [mybank3] as the final mapping would have more than 1 type: [my_doc2, my_doc1]"}}},{"create":{"_index":"mybank3","_type":"my_doc3","_id":"AWz8rnbckzP-cujdA_Fw","status":400,"error":{"type":"illegal_argument_exception","reason":"Rejecting mapping update to [mybank3] as the final mapping would have more than 1 type: [my_doc2, my_doc3]"}}},{"create":{"_index":"mybank3","_type":"my_doc5","_id":"AWz8rrsEkzP-cujdA_Fy","status":400,"error":{"type":"illegal_argument_exception","reason":"Rejecting mapping update to [mybank3] as the final mapping would have more than 1 type: [my_doc2, my_doc5]"}}},{"create":{"_index":"mybank3","_type":"doc","_id":"3","status":400,"error":{"type":"illegal_argument_exception","reason":"Rejecting mapping update to [mybank3] as the final mapping would have more than 1 type: [my_doc2, doc]"}}}]}
 type BulkResponse struct {
-	Took   int              `json:"took,omitempty"`
-	Errors bool              `json:"errors,omitempty"`
+	Took   int                 `json:"took,omitempty"`
+	Errors bool                `json:"errors,omitempty"`
 	Items  []map[string]Action `json:"items,omitempty"`
 }
 
@@ -106,6 +105,7 @@ type Migrator struct {
 type Config struct {
 
 	// config options
+	MatchQuery        string `short:"Q" long:"match" description:"dsql query against source index to filter data"` //by danny
 	SourceEs          string `short:"s" long:"source"  description:"source elasticsearch instance, ie: http://localhost:9200"`
 	Query             string `short:"q" long:"query"  description:"query against source elasticsearch instance, filter data before migrate, ie: name:medcl"`
 	TargetEs          string `short:"d" long:"dest"    description:"destination elasticsearch instance, ie: http://localhost:9201"`
