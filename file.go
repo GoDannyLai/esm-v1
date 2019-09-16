@@ -17,24 +17,28 @@ limitations under the License.
 package main
 
 import (
-	"sync"
-	"gopkg.in/cheggaaa/pb.v1"
-	log "github.com/cihub/seelog"
-	"os"
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	log "github.com/cihub/seelog"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
-func checkFileIsExist(filename string) (bool) {
-	var exist = true;
+func checkFileIsExist(filename string) bool {
+	var exist = true
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		exist = false;
+		exist = false
 	}
-	return exist;
+	return exist
 }
 
-func (m *Migrator) NewFileReadWorker(pb *pb.ProgressBar, wg *sync.WaitGroup)  {
+func (m *Migrator) NewFileReadWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 	log.Debug("start reading file")
 	f, err := os.Open(m.Config.DumpInputFile)
 	if err != nil {
@@ -45,9 +49,9 @@ func (m *Migrator) NewFileReadWorker(pb *pb.ProgressBar, wg *sync.WaitGroup)  {
 	defer f.Close()
 	r := bufio.NewReader(f)
 	lineCount := 0
-	for{
-		line,err := r.ReadString('\n')
-		if io.EOF == err || nil != err{
+	for {
+		line, err := r.ReadString('\n')
+		if io.EOF == err || nil != err {
 			break
 		}
 		lineCount += 1
@@ -55,7 +59,7 @@ func (m *Migrator) NewFileReadWorker(pb *pb.ProgressBar, wg *sync.WaitGroup)  {
 
 		//log.Trace("reading file,",lineCount,",", line)
 		err = json.Unmarshal([]byte(line), &js)
-		if(err!=nil){
+		if err != nil {
 			log.Error(err)
 			continue
 		}
@@ -71,18 +75,18 @@ func (m *Migrator) NewFileReadWorker(pb *pb.ProgressBar, wg *sync.WaitGroup)  {
 
 func (c *Migrator) NewFileDumpWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 	var f *os.File
-	var err1   error;
+	var err1 error
 
 	if checkFileIsExist(c.Config.DumpOutFile) {
 		f, err1 = os.OpenFile(c.Config.DumpOutFile, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-		if(err1!=nil){
+		if err1 != nil {
 			log.Error(err1)
 			return
 		}
 
-	}else {
+	} else {
 		f, err1 = os.Create(c.Config.DumpOutFile)
-		if(err1!=nil){
+		if err1 != nil {
 			log.Error(err1)
 			return
 		}
@@ -90,7 +94,7 @@ func (c *Migrator) NewFileDumpWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 
 	w := bufio.NewWriter(f)
 
-	READ_DOCS:
+READ_DOCS:
 	for {
 		docI, open := <-c.DocChan
 
@@ -111,14 +115,14 @@ func (c *Migrator) NewFileDumpWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 			}
 		}
 
-		jsr,err:=json.Marshal(docI)
+		jsr, err := json.Marshal(docI)
 		log.Trace(string(jsr))
-		if(err!=nil){
+		if err != nil {
 			log.Error(err)
 		}
-		n,err:=w.WriteString(string(jsr))
-		if(err!=nil){
-			log.Error(n,err)
+		n, err := w.WriteString(string(jsr))
+		if err != nil {
+			log.Error(n, err)
 		}
 		w.WriteString("\n")
 		pb.Increment()
@@ -129,7 +133,7 @@ func (c *Migrator) NewFileDumpWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 		}
 	}
 
-	WORKER_DONE:
+WORKER_DONE:
 	w.Flush()
 	f.Close()
 
@@ -137,4 +141,114 @@ func (c *Migrator) NewFileDumpWorker(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 	log.Debug("file dump finished")
 }
 
+func (c *Migrator) NewFileDumpWorkerSplit(pb *pb.ProgressBar, wg *sync.WaitGroup) {
 
+	var (
+		f           *os.File
+		err1        error
+		idx         int    = 0
+		fndir       string = filepath.Dir(c.Config.DumpOutFile)
+		fnbase      string
+		fnsuffix    string
+		fn          string
+		sizeCurrent int = 0
+		sizeMax     int = c.Config.SplitSize * 1024 * 1024
+		w           *bufio.Writer
+	)
+	tmp := filepath.Base(c.Config.DumpOutFile)
+	tmpArr := strings.Split(tmp, ".")
+	if len(tmpArr) > 1 {
+		fnsuffix = tmpArr[len(tmpArr)-1]
+	} else {
+		fnsuffix = ""
+	}
+	if len(tmpArr) > 2 {
+		fnbase = strings.Join(tmpArr[:len(tmpArr)-1], ".")
+	} else {
+		fnbase = tmpArr[0]
+	}
+
+READ_DOCS:
+	for {
+		if sizeCurrent == 0 {
+			// new file
+			idx++
+			if fnsuffix == "" {
+				fn = filepath.Join(fndir, fmt.Sprintf("%s.split.%d", fnbase, idx))
+			} else {
+				fn = filepath.Join(fndir, fmt.Sprintf("%s.split.%d.%s", fnbase, idx, fnsuffix))
+			}
+			if checkFileIsExist(fn) {
+				f, err1 = os.OpenFile(fn, os.O_APPEND|os.O_WRONLY|os.O_TRUNC, os.ModeAppend)
+				if err1 != nil {
+					log.Error(err1)
+					return
+				}
+
+			} else {
+				f, err1 = os.Create(fn)
+				if err1 != nil {
+					log.Error(err1)
+					return
+				}
+			}
+			w = bufio.NewWriter(f)
+			log.Infof("writting to file %s", fn)
+
+		}
+		docI, open := <-c.DocChan
+
+		// this check is in case the document is an error with scroll stuff
+		if status, ok := docI["status"]; ok {
+			if status.(int) == 404 {
+				log.Error("error: ", docI["response"])
+				continue
+			}
+		}
+
+		// sanity check
+		for _, key := range []string{"_index", "_type", "_source", "_id"} {
+			if _, ok := docI[key]; !ok {
+				//json,_:=json.Marshal(docI)
+				//log.Errorf("failed parsing document: %v", string(json))
+				break READ_DOCS
+			}
+		}
+
+		jsr, err := json.Marshal(docI)
+		log.Trace(string(jsr))
+		if err != nil {
+			log.Error(err)
+		}
+		n, err := w.WriteString(string(jsr))
+		if err != nil {
+			log.Error(n, err)
+		}
+		w.WriteString("\n")
+		pb.Increment()
+		sizeCurrent += n
+
+		if sizeCurrent >= sizeMax {
+			w.Flush()
+			f.Close()
+			w = nil
+			f = nil
+			sizeCurrent = 0
+		}
+
+		// if channel is closed flush and gtfo
+		if !open {
+			break
+		}
+	}
+
+	if w != nil {
+		w.Flush()
+	}
+	if f != nil {
+		f.Close()
+	}
+
+	wg.Done()
+	log.Debug("file dump finished")
+}

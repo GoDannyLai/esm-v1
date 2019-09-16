@@ -433,7 +433,11 @@ func main() {
 		// start file write
 		outputBar.Prefix("Write")
 		wg.Add(1)
-		go migrator.NewFileDumpWorker(outputBar, &wg)
+		if migrator.Config.SplitSize > 0 {
+			go migrator.NewFileDumpWorkerSplit(outputBar, &wg)
+		} else {
+			go migrator.NewFileDumpWorker(outputBar, &wg)
+		}
 	}
 
 	wg.Wait()
