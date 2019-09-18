@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-
+	exitCode := 1
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	c := &Config{}
@@ -32,23 +32,27 @@ func main() {
 		log.Error(err)
 		// if error, print it
 		fmt.Print(err)
-		return
+		//return
+		os.Exit(exitCode)
 	}
 
 	setInitLogging(c.LogLevel)
 
 	if len(c.SourceEs) == 0 && len(c.DumpInputFile) == 0 {
 		log.Error("no input, type --help for more details")
-		return
+		//return
+		os.Exit(exitCode)
 	}
 	if len(c.TargetEs) == 0 && len(c.DumpOutFile) == 0 {
 		log.Error("no output, type --help for more details")
-		return
+		//return
+		os.Exit(exitCode)
 	}
 
 	if c.SourceEs == c.TargetEs && c.SourceIndexNames == c.TargetIndexName {
 		log.Error("migration output is the same as the output")
-		return
+		//return
+		os.Exit(exitCode)
 	}
 
 	// enough of a buffer to hold all the search results across all workers
@@ -73,7 +77,8 @@ func main() {
 		//get source es version
 		srcESVersion, errs := migrator.ClusterVersion(c.SourceEs, migrator.SourceAuth, migrator.Config.SourceProxy)
 		if errs != nil {
-			return
+			//return
+			os.Exit(exitCode)
 		}
 		if strings.HasPrefix(srcESVersion.Version.Number, "7.") {
 			log.Debug("source es is V7,", srcESVersion.Version.Number)
@@ -118,7 +123,8 @@ func main() {
 			scroll, err := migrator.SourceESAPI.NewScroll(c.SourceIndexNames, c.ScrollTime, c.DocBufferCount, c.Query, c.MatchQuery, slice, c.ScrollSliceSize, c.Fields)
 			if err != nil {
 				log.Error(err)
-				return
+				//return
+				os.Exit(exitCode)
 			}
 
 			temp := scroll.(ScrollAPI)
@@ -129,7 +135,8 @@ func main() {
 
 				if temp.GetHitsTotal() == 0 {
 					log.Error("can't find documents from source.")
-					return
+					//return
+					os.Exit(exitCode)
 				}
 
 				go func() {
@@ -167,7 +174,11 @@ func main() {
 		f, err := os.Open(c.DumpInputFile)
 		if err != nil {
 			log.Error(err)
-			return
+			//return
+			if f != nil {
+				f.Close()
+			}
+			os.Exit(exitCode)
 		}
 		//get file lines
 		lineCount := 0
@@ -205,7 +216,8 @@ func main() {
 		//get target es version
 		descESVersion, errs := migrator.ClusterVersion(c.TargetEs, migrator.TargetAuth, migrator.Config.TargetProxy)
 		if errs != nil {
-			return
+			//return
+			os.Exit(exitCode)
 		}
 
 		if strings.HasPrefix(descESVersion.Version.Number, "7.") {
@@ -242,7 +254,8 @@ func main() {
 		log.Debug("start process with mappings")
 		if srcESVersion != nil && c.CopyIndexMappings && descESVersion.Version.Number[0] != srcESVersion.Version.Number[0] {
 			log.Error(srcESVersion.Version, "=>", descESVersion.Version, ",cross-big-version mapping migration not avaiable, please update mapping manually :(")
-			return
+			//return
+			os.Exit(exitCode)
 		}
 
 		// wait for cluster state to be okay before moving
@@ -273,7 +286,8 @@ func main() {
 			indexNames, indexCount, sourceIndexMappings, err := migrator.SourceESAPI.GetIndexMappings(c.CopyAllIndexes, c.SourceIndexNames)
 			if err != nil {
 				log.Error(err)
-				return
+				//return
+				os.Exit(exitCode)
 			}
 
 			sourceIndexRefreshSettings := map[string]interface{}{}
@@ -294,7 +308,8 @@ func main() {
 					log.Debug("source index settings:", sourceIndexSettings)
 					if err != nil {
 						log.Error(err)
-						return
+						//return
+						os.Exit(exitCode)
 					}
 
 					//get target index settings
@@ -407,9 +422,10 @@ func main() {
 
 			} else {
 				log.Error("index not exists,", c.SourceIndexNames)
-				return
+				//return
+				os.Exit(exitCode)
 			}
-
+			// no os.Exit after this position
 			defer migrator.recoveryIndexSettings(sourceIndexRefreshSettings)
 		} else if len(c.DumpInputFile) > 0 {
 			//check shard settings
