@@ -361,8 +361,10 @@ func (s *ESAPIV0) NewScroll(indexNames string, scrollTime string, docBufferCount
 	}
 	// by danny
 	if len(match) > 0 {
+		log.Warn("-Q is set, ignore -q and --fields")
 		jsonBody = match
 	}
+	log.Warnf("url: %s, query body: %s", url, jsonBody)
 
 	resp, body, errs := Post(url, s.Auth, jsonBody, s.HttpProxy)
 

@@ -18,13 +18,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/cihub/seelog"
 	"gopkg.in/cheggaaa/pb.v1"
@@ -137,6 +141,15 @@ WORKER_DONE:
 	w.Flush()
 	f.Close()
 
+	if !c.Config.UnGzip {
+		outMsg, errMsg, errM := GzipFile(c.Config.DumpOutFile, c.Config.GzipTimeout)
+		if errM != nil {
+			log.Errorf("error to gzip %s: %s %s\n\t%s", c.Config.DumpOutFile, errM, errMsg, outMsg)
+		} else {
+			log.Warnf("successfully gzip %s: %s\n\t%s", c.Config.DumpOutFile, errMsg, outMsg)
+		}
+	}
+
 	wg.Done()
 	log.Debug("file dump finished")
 }
@@ -154,6 +167,9 @@ func (c *Migrator) NewFileDumpWorkerSplit(pb *pb.ProgressBar, wg *sync.WaitGroup
 		sizeCurrent int = 0
 		sizeMax     int = c.Config.SplitSize * 1024 * 1024
 		w           *bufio.Writer
+		errMsg      string
+		outMsg      string
+		errM        error
 	)
 	tmp := filepath.Base(c.Config.DumpOutFile)
 	tmpArr := strings.Split(tmp, ".")
@@ -234,6 +250,14 @@ READ_DOCS:
 			w = nil
 			f = nil
 			sizeCurrent = 0
+			if !c.Config.UnGzip {
+				outMsg, errMsg, errM = GzipFile(fn, c.Config.GzipTimeout)
+				if errM != nil {
+					log.Errorf("error to gzip %s: %s %s\n\t%s", fn, errM, errMsg, outMsg)
+				} else {
+					log.Warnf("successfully gzip %s: %s\n\t%s", fn, errMsg, outMsg)
+				}
+			}
 		}
 
 		// if channel is closed flush and gtfo
@@ -247,8 +271,39 @@ READ_DOCS:
 	}
 	if f != nil {
 		f.Close()
+		if !c.Config.UnGzip {
+			outMsg, errMsg, errM = GzipFile(fn, c.Config.GzipTimeout)
+			if errM != nil {
+				log.Errorf("error to gzip %s: %s %s\n\t%s", fn, errM, errMsg, outMsg)
+			} else {
+				log.Warnf("successfully gzip %s: %s\n\t%s", fn, errMsg, outMsg)
+			}
+		}
 	}
 
 	wg.Done()
 	log.Debug("file dump finished")
+}
+
+func GzipFile(fileFull string, timeout int) (string, string, error) {
+	var (
+		out    bytes.Buffer
+		errout bytes.Buffer
+		err    error
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "gzip", fileFull)
+	cmd.Stdout = &out
+	cmd.Stderr = &errout
+
+	err = cmd.Run()
+
+	if err != nil {
+		return strings.TrimSpace(out.String()), strings.TrimSpace(errout.String()), err
+	} else {
+		return strings.TrimSpace(out.String()), strings.TrimSpace(errout.String()), nil
+	}
 }

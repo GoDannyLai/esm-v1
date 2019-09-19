@@ -69,10 +69,34 @@ func (s *ESAPIV7) NewScroll(indexNames string, scrollTime string, docBufferCount
 			jsonBody = string(jsonArray)
 		}
 	}
+
 	//by danny
 	if len(match) > 0 {
-		jsonBody = match
+		log.Warn("-Q is set, ignore -q and --fields")
+		if maxSlicedCount > 1 {
+			var tmpMap map[string]interface{}
+			err := json.Unmarshal([]byte(match), &tmpMap)
+			if err != nil {
+				log.Errorf("error to unmarshal query body set by -M: %s", err)
+				return nil, err
+			}
+			log.Tracef("add to -M query body, sliced scroll, %d of %d", slicedId, maxSlicedCount)
+			tmpMap["slice"] = map[string]interface{}{}
+			tmpMap["slice"].(map[string]interface{})["id"] = slicedId
+			tmpMap["slice"].(map[string]interface{})["max"] = maxSlicedCount
+			tmpJarr, err := json.Marshal(tmpMap)
+			if err != nil {
+				log.Errorf("error to marshal query body by -M and slice scroll: %s", err)
+				return nil, err
+			}
+			jsonBody = string(tmpJarr)
+
+		} else {
+			jsonBody = match
+		}
+
 	}
+	log.Warnf("url: %s, query body: %s", url, jsonBody)
 
 	resp, body, errs := Post(url, s.Auth, jsonBody, s.HttpProxy)
 
